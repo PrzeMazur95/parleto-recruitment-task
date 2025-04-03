@@ -31,6 +31,10 @@ class Statement(models.Model):
     account = models.ForeignKey(Account, on_delete=models.PROTECT)
     date = models.DateField()
     # TODO: TASK → make sure that account and date is unique on database level
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['account', 'date'], name='unique_account_date_pair')
+        ]
 
     def __str__(self):
         return f'{self.account} → {self.date}'
