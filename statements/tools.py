@@ -11,6 +11,7 @@ def statement_import(file_handler):
     # TODO: TASK → optimize database queries during import
     #I would use here Redis, below dicts are only for simplicity purposes. Main goal is that we have to reduce db queries.
     #Simple logic for caching, if account is not in cache, we create it and add to cache, same with statements
+    #We had a bug here, because titles for StatementItem were not adding to DB, I fixed it
     with transaction.atomic():
         accounts_cache = {}
         statements_cache = {}
@@ -39,6 +40,7 @@ def statement_import(file_handler):
                 statement=statement,
                 amount=row['amount'],
                 currency=row['currency'],
+                title=row['title'],
             )
             idx += 1
     return idx
