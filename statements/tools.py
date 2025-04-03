@@ -12,9 +12,11 @@ def statement_import(file_handler):
     #I would use here Redis, below dicts are only for simplicity purposes. Main goal is that we have to reduce db queries.
     #Simple logic for caching, if account is not in cache, we create it and add to cache, same with statements
     #We had a bug here, because titles for StatementItem were not adding to DB, I fixed it
+    #I added statementItem bulk_create to reduce the number of create queries to the database
     with transaction.atomic():
         accounts_cache = {}
         statements_cache = {}
+        statement_items = []
         for row in csv.DictReader(file_handler):
             account_key = (row['account'], row['currency'])
             if account_key not in accounts_cache:
@@ -36,12 +38,13 @@ def statement_import(file_handler):
                 statements_cache[statement_key] = statement
             else:
                 statement = statements_cache[statement_key]
-            StatementItem.objects.create(
+            statement_items.append(StatementItem(
                 statement=statement,
                 amount=row['amount'],
                 currency=row['currency'],
                 title=row['title'],
-            )
+            ))
             idx += 1
+        StatementItem.objects.bulk_create(statement_items)
     return idx
 
