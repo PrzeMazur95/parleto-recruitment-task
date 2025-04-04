@@ -21,7 +21,21 @@ def report_turnover_by_year_month(period_begin, period_end):
 class Account(models.Model):
     name = models.CharField(max_length=100)
     currency = models.CharField(max_length=3)
-    # TODO: TASK → add field balance that will update automatically 
+    # TODO: TASK → add field balance that will update automatically
+    # I was thinking about two approaches:
+    #   - we can use signals or extend statementItem save method, but each time balance will be updated when new item is added
+    #   - or we can do once balance update after import.
+    # I have chosen the second approach, because we are keeping eye on performance.
+    # In my opinion, we should use signal or extend save method only when we need to update this field in real time,
+    # but in this case of multiple rows imports, for better performance I used single update after import
+    # so it depends on business logic.
+    # Large imports should be done in batch, small individual updates, like in app by user, can be done with signals or extended save method.
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['name', 'currency']),
+        ]
      
     def __str__(self):
         return f'{self.name}[{self.currency}]'
@@ -45,7 +59,13 @@ class StatementItem(models.Model):
     amount = models.DecimalField(max_digits=6, decimal_places=2)
     currency = models.CharField(max_length=3)
     title = models.CharField(max_length=100)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE)
     # TODO:  TASK → add field comments (type text)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['account', 'currency']),
+        ]
     
 
     def __str__(self):

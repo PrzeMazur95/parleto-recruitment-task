@@ -1,6 +1,7 @@
 import csv
 
 from django.db import transaction
+from django.db.models import Sum
 from django.core.exceptions import ValidationError
 from statements.models import Account, Statement, StatementItem
 
@@ -43,8 +44,14 @@ def statement_import(file_handler):
                 amount=row['amount'],
                 currency=row['currency'],
                 title=row['title'],
+                account=account
             ))
             idx += 1
         StatementItem.objects.bulk_create(statement_items)
+
+        account_balances = StatementItem.objects.values('account').annotate(balance_sum=Sum('amount'))
+        for balance_data in account_balances:
+            Account.objects.filter(id=balance_data['account']).update(balance=balance_data['balance_sum'])
+
     return idx
 
