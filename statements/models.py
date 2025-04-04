@@ -61,6 +61,7 @@ class StatementItem(models.Model):
     title = models.CharField(max_length=100)
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     # TODO:  TASK → add field comments (type text)
+    comments = models.TextField(blank=True)
 
     class Meta:
         indexes = [
