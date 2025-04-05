@@ -1,21 +1,91 @@
+from .date_preparator import ValidateFormat, PrepareWholeMonthDate, AddDefaultDayToMonth, ValidateDateOrder, FinalParser
 from django.db import models
+from django.db.models import Sum, Case, When, Value, F
 
+def prepare_dates(period_begin, period_end):
+    try:
+        # order of handlers is important, especially the last two. They are also proper ordered in its file with comments.
+        # if we will have new example of date format (on backend we should have it prepared in one format given from FE),
+        # but in our case we should add new handler to its file and to proper place in the list below.
+        handlers = [
+            ValidateFormat(),
+            PrepareWholeMonthDate(),
+            AddDefaultDayToMonth(),
+            ValidateDateOrder(),
+            FinalParser()
+        ]
+        for handler in handlers:
+            if handler.can_handle(period_begin, period_end):
+                period_begin, period_end = handler.prepare(period_begin, period_end)
+        return period_begin, period_end
+
+    except ValueError as e:
+        raise ValueError(e)
 
 def report_turnover_by_year_month(period_begin, period_end):
     # TODO: TASK → make report using 1 database query without any math in python
-    # example output
-    return {
-        "2009-11": {
-            {
-                "incomes": {
-                    "PLN": 120
-                },
-                "expenses": {
-                    "PLN": 100
-                }
+    # I was not sure how to behave with internal transfers, but i kept them in incomes and expenses, so overall is 0
+    # It is hard now to exclude it, I do not know if the transfer title always be the same, to take it into consideration
+    # Second thing is, that I am not pretty sure if models are good place to put this function, better is some service with reports
+    # but still do not know how test are written, so I will not refactor it.
+    try:
+        result_date_range_key = f"{period_begin}-{period_end}" if period_begin != period_end else f"{period_begin}"
+        period_begin, period_end = prepare_dates(period_begin, period_end)
+    except ValueError as e:
+        return f"Error: {e}"
+
+    transactions_amounts = StatementItem.objects.filter(
+        statement_id__in=Statement.objects.filter(date__range=[period_begin, period_end]).values_list('id', flat=True)
+    ).annotate(
+        negative_amount=Sum(
+            Case(
+                When(amount__lt=0, then=F('amount')),
+                default=Value(0),
+                output_field=models.DecimalField()
+            )
+        ),
+        positive_amount=Sum(
+            Case(
+                When(amount__gt=0, then=F('amount')),
+                default=Value(0),
+                output_field=models.DecimalField()
+            )
+        )
+    ).aggregate(
+        total_negative_amount=Sum('negative_amount'),
+        total_positive_amount=Sum('positive_amount')
+    )
+
+    if not transactions_amounts['total_positive_amount'] and transactions_amounts['total_negative_amount'] is None:
+        return f"There are no transactions in the given period: {result_date_range_key}"
+
+    result = {
+        result_date_range_key: {
+            "incomes": {
+                "PLN": float(abs(transactions_amounts['total_positive_amount']))
+            },
+            "expenses": {
+                "PLN": float(abs(transactions_amounts['total_negative_amount']))
             }
         }
     }
+
+    return result
+
+    # example output - this dict has wrong format, and will raise TypeError.
+    # dict with incomes and expenses cannot be element of set - "unhashable type: 'dict'"
+    # return {
+    #     "2009-11": {
+    #         {
+    #             "incomes": {
+    #                 "PLN": 120
+    #             },
+    #             "expenses": {
+    #                 "PLN": 100
+    #             }
+    #         }
+    #     }
+    # }
 
 
 class Account(models.Model):
